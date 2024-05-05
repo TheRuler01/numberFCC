@@ -1,132 +1,190 @@
-#!/bin/bash
-PSQL="psql --username=freecodecamp --dbname=number_guess -t --no-align -c"
+--
+-- PostgreSQL database dump
+--
 
-INPUT_NAME() {
-  echo "Enter your username:"
-  read NAME
-  n=${#NAME}
+-- Dumped from database version 12.17 (Ubuntu 12.17-1.pgdg22.04+1)
+-- Dumped by pg_dump version 12.17 (Ubuntu 12.17-1.pgdg22.04+1)
 
-  #When you run your script, you should prompt the user for a username with Enter your username:, and take a username as input.Your database should allow usernames that are 22 characters
-  if [[ ! $n -le 22 ]] || [[ ! $n -gt 0 ]]
-  then
-    INPUT_NAME
-  else
-    USER_NAME=$(echo $($PSQL "SELECT username FROM users WHERE username='$NAME';") | sed 's/ //g')
-    if [[ ! -z $USER_NAME ]]
-    then
-      #If that username has been used before, it should print Welcome back, <username>! You have played <games_played> games, and your best game took <best_game> guesses., 
-      #with <username> being a users name from the database,
-      #<games_played> being the total number of games that user has played, 
-      #and <best_game> being the fewest number of guesses it took that user to win the game
-      USER_ID=$(echo $($PSQL "SELECT user_id FROM users WHERE username='$USER_NAME';") | sed 's/ //g')
-      USER_NAME=$(echo $($PSQL "SELECT username FROM users WHERE user_id='$USER_ID';") | sed 's/ //g')
-      GAME_PLAYED=$(echo $($PSQL "SELECT frequent_games FROM users WHERE user_id=$USER_ID;") | sed 's/ //g')
-      BEST_GAME=$(echo $($PSQL "SELECT MIN(best_guess) FROM users LEFT JOIN games USING(user_id) WHERE user_id=$USER_ID;") | sed 's/ //g')
-      echo "Welcome back, $USER_NAME! You have played $GAME_PLAYED games, and your best game took $BEST_GAME guesses."
-    else
-      #If the username has not been used before, you should print Welcome, <username>! It looks like this is your first time here.
-      USER_NAME=$NAME
-      echo -e "\nWelcome, $USER_NAME! It looks like this is your first time here."
-    fi
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
 
-    #Your script should randomly generate a number that users have to guess
-    #The next line printed should be Guess the secret number between 1 and 1000: and input from the user should be read
-    CORRECT_ANSWER=$(( $RANDOM % 1000 + 1 ))
-    GUESS_COUNT=0
-    INPUT_GUESS $USER_NAME $CORRECT_ANSWER $GUESS_COUNT
-  fi
-}
+DROP DATABASE number_guess;
+--
+-- Name: number_guess; Type: DATABASE; Schema: -; Owner: freecodecamp
+--
 
-INPUT_GUESS() {
-  USER_NAME=$1
-  CORRECT_ANSWER=$2
-  GUESS_COUNT=$3
-  USSER_GUESS=$4
-
-  if [[ -z $USSER_GUESS ]]
-  then
-    echo "Guess the secret number between 1 and 1000:"
-    read USSER_GUESS
-  else
-    #If anything other than an integer is input as a guess, it should print That is not an integer, guess again:
-    echo "That is not an integer, guess again:"
-    read USSER_GUESS
-  fi
-
-  GUESS_COUNT=$(( $GUESS_COUNT + 1 ))
-  if [[ ! $USSER_GUESS =~ ^[0-9]+$ ]]
-  then
-    INPUT_GUESS $USER_NAME $CORRECT_ANSWER $GUESS_COUNT $USSER_GUESS
-  else
-    CHECK_ANSWER $USER_NAME $CORRECT_ANSWER $GUESS_COUNT $USSER_GUESS
-  fi
-}
-
-CHECK_ANSWER() {
-  USER_NAME=$1 
-  CORRECT_ANSWER=$2 
-  GUESS_COUNT=$3
-  USSER_GUESS=$4
-  
-  #Until they guess the secret number, 
-  #it should print 
-  #It's lower than that, guess again: if the previous input was higher than the secret number, and
-  #It's higher than that, guess again: if the previous input was lower than the secret number. 
-  #Asking for input each time until they input the secret number.
-  if [[ $USSER_GUESS -lt $CORRECT_ANSWER ]]
-  then
-    echo "It's lower than that, guess again:"
-    read USSER_GUESS
-  elif [[ $USSER_GUESS -gt $CORRECT_ANSWER ]]
-  then
-    echo "It's higher than that, guess again:"
-    read USSER_GUESS
-  else
-    GUESS_COUNT=$GUESS_COUNT
-  fi
-
-  GUESS_COUNT=$(( $GUESS_COUNT + 1 ))
-  if [[ ! $USSER_GUESS =~ ^[0-9]+$ ]]
-  then
-    INPUT_GUESS $USER_NAME $CORRECT_ANSWER $GUESS_COUNT $USSER_GUESS
-  elif [[ $USSER_GUESS -lt $CORRECT_ANSWER ]] || [[ $USSER_GUESS -gt $CORRECT_ANSWER ]]
-  then
-    CHECK_ANSWER $USER_NAME $CORRECT_ANSWER $GUESS_COUNT $USSER_GUESS
-  elif [[ $USSER_GUESS -eq $CORRECT_ANSWER ]]
-  then
-    #When the secret number is guessed, your script should print You guessed it in <number_of_guesses> tries. The secret number was <secret_number>. 
-    #Nice job! and finish running
-    SAVE_USER $USER_NAME $GUESS_COUNT
-    NUMBER_OF_GUESSES=$GUESS_COUNT
-    SECRET_NUMBER=$CORRECT_ANSWER
-    echo "You guessed it in $NUMBER_OF_GUESSES tries. The secret number was $SECRET_NUMBER. Nice job!"
-  fi
-
-}
-
-SAVE_USER() {
-  USER_NAME=$1 
-  GUESS_COUNT=$2
-
-  CHECK_NAME=$($PSQL "SELECT username FROM users WHERE username='$USER_NAME';")
-  if [[ -z $CHECK_NAME ]]
-  then
-    INSERT_NEW_USER=$($PSQL "INSERT INTO users(username, frequent_games) VALUES('$USER_NAME',1);")
-  else
-    GET_GAME_PLAYED=$(( $($PSQL "SELECT frequent_games FROM users WHERE username='$USER_NAME';") + 1))
-    UPDATE_EXIST_USER=$($PSQL "UPDATE users SET frequent_games=$GET_GAME_PLAYED WHERE username='$USER_NAME';")
-  fi
-  SAVE_GAME $USER_NAME $GUESS_COUNT
-}
-
-SAVE_GAME() {
-  USER_NAME=$1 
-  NUMBER_OF_GUESSES=$2
-
-  USER_ID=$($PSQL "SELECT user_id FROM users WHERE username='$USER_NAME';")
-  INSERT_GAME=$($PSQL "INSERT INTO games(user_id, best_guess) VALUES($USER_ID, $NUMBER_OF_GUESSES);")
-  USER_NAME=$($PSQL "SELECT username FROM users WHERE user_id=$USER_ID;")
-}
+CREATE DATABASE number_guess WITH TEMPLATE = template0 ENCODING = 'UTF8' LC_COLLATE = 'C.UTF-8' LC_CTYPE = 'C.UTF-8';
 
 
-INPUT_NAME
+ALTER DATABASE number_guess OWNER TO freecodecamp;
+
+\connect number_guess
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- Name: games; Type: TABLE; Schema: public; Owner: freecodecamp
+--
+
+CREATE TABLE public.games (
+    game_id integer NOT NULL,
+    user_id integer NOT NULL,
+    best_guess integer DEFAULT 0 NOT NULL
+);
+
+
+ALTER TABLE public.games OWNER TO freecodecamp;
+
+--
+-- Name: games_game_id_seq; Type: SEQUENCE; Schema: public; Owner: freecodecamp
+--
+
+CREATE SEQUENCE public.games_game_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.games_game_id_seq OWNER TO freecodecamp;
+
+--
+-- Name: games_game_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: freecodecamp
+--
+
+ALTER SEQUENCE public.games_game_id_seq OWNED BY public.games.game_id;
+
+
+--
+-- Name: users; Type: TABLE; Schema: public; Owner: freecodecamp
+--
+
+CREATE TABLE public.users (
+    user_id integer NOT NULL,
+    username character varying(22) NOT NULL,
+    frequent_games integer DEFAULT 0 NOT NULL
+);
+
+
+ALTER TABLE public.users OWNER TO freecodecamp;
+
+--
+-- Name: users_user_id_seq; Type: SEQUENCE; Schema: public; Owner: freecodecamp
+--
+
+CREATE SEQUENCE public.users_user_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.users_user_id_seq OWNER TO freecodecamp;
+
+--
+-- Name: users_user_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: freecodecamp
+--
+
+ALTER SEQUENCE public.users_user_id_seq OWNED BY public.users.user_id;
+
+
+--
+-- Name: games game_id; Type: DEFAULT; Schema: public; Owner: freecodecamp
+--
+
+ALTER TABLE ONLY public.games ALTER COLUMN game_id SET DEFAULT nextval('public.games_game_id_seq'::regclass);
+
+
+--
+-- Name: users user_id; Type: DEFAULT; Schema: public; Owner: freecodecamp
+--
+
+ALTER TABLE ONLY public.users ALTER COLUMN user_id SET DEFAULT nextval('public.users_user_id_seq'::regclass);
+
+
+--
+-- Data for Name: games; Type: TABLE DATA; Schema: public; Owner: freecodecamp
+--
+
+
+
+--
+-- Data for Name: users; Type: TABLE DATA; Schema: public; Owner: freecodecamp
+--
+
+
+
+--
+-- Name: games_game_id_seq; Type: SEQUENCE SET; Schema: public; Owner: freecodecamp
+--
+
+SELECT pg_catalog.setval('public.games_game_id_seq', 1, false);
+
+
+--
+-- Name: users_user_id_seq; Type: SEQUENCE SET; Schema: public; Owner: freecodecamp
+--
+
+SELECT pg_catalog.setval('public.users_user_id_seq', 1, false);
+
+
+--
+-- Name: games games_pkey; Type: CONSTRAINT; Schema: public; Owner: freecodecamp
+--
+
+ALTER TABLE ONLY public.games
+    ADD CONSTRAINT games_pkey PRIMARY KEY (game_id);
+
+
+--
+-- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: freecodecamp
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_pkey PRIMARY KEY (user_id);
+
+
+--
+-- Name: users users_username_key; Type: CONSTRAINT; Schema: public; Owner: freecodecamp
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_username_key UNIQUE (username);
+
+
+--
+-- Name: games games_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: freecodecamp
+--
+
+ALTER TABLE ONLY public.games
+    ADD CONSTRAINT games_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(user_id);
+
+
+--
+-- PostgreSQL database dump complete
+--
